@@ -1,0 +1,44 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install 32-bit MinGW-w64 cross compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-mingw-w64-i686
+          i686-w64-mingw32-g++ --version | head -1
+
+      - name: Build
+        run: make CXX=i686-w64-mingw32-g++
+
+      - name: Verify the artifacts are 32-bit Windows DLLs
+        run: |
+          # older and newer versions of file word this differently, so check each part
+          for dll in InventorySortMod.dll InventorySortKeyMod.dll InventorySortButtonMod.dll; do
+            info=$(file "$dll")
+            echo "$info"
+            grep -q 'PE32 executable' <<< "$info"
+            grep -q '(DLL)' <<< "$info"
+            grep -q 'MS Windows' <<< "$info"
+            grep -Eq 'Intel (80386|i386)' <<< "$info"
+          done
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            InventorySortMod.dll InventorySortKeyMod.dll InventorySortButtonMod.dll \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
